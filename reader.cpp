@@ -3,8 +3,10 @@
 #include <vector>
 #include <string.h>
 #include <unordered_map>
+#include <pqxx/pqxx>
 
 using namespace std;
+using namespace pqxx;
 
 typedef struct {
     string name;
@@ -25,12 +27,106 @@ typedef struct {
     string title;
     string group;
     int salesrank;
+    int total_reviews;
     int downloaded;
     float avg_rating;
-    vector<string> similars;
     vector<Category> categories;
     vector<Review> reviews;
 } Product;
+
+typedef struct {
+    char asin_product[15];
+    char asin_similar[15];
+} Similar;
+
+void create_tables(connection& conn) {
+    string sql_create_category;
+    string sql_create_product;
+    string sql_create_product_category;
+    string sql_create_product_similar;
+    string sql_create_review;
+    work transaction(conn);
+
+    sql_create_category = "CREATE TABLE CATEGORY(" \
+    "ID INT PRIMARY KEY NOT NULL, " \
+    "NAME VARCHAR(50), "\
+    "ID_PARENT INT, "\
+    "FOREIGN KEY (ID_PARENT) REFERENCES CATEGORY(ID));";
+
+    sql_create_product = "CREATE TABLE PRODUCT(" \
+    "ASIN VARCHAR(15) PRIMARY KEY NOT NULL, "\
+    "TITLE TEXT NOT NULL, "\
+    "PRODUCT_GROUP VARCHAR(30), "\
+    "SALESRANK INT, "\
+    "AVG_RATING FLOAT, "\
+    "TOTAL_REVIEWS INT, "\
+    "DOWNLOADED INT);";
+
+    sql_create_product_category = "CREATE TABLE PRODUCT_CATEGORY(" \
+    "ASIN_PRODUCT VARCHAR(11) NOT NULL, " \
+    "ID_CATEGORY INT NOT NULL, "\
+    "PRIMARY KEY (ASIN_PRODUCT, ID_CATEGORY), " \
+    "FOREIGN KEY (ASIN_PRODUCT) REFERENCES PRODUCT(ASIN), "\
+    "FOREIGN KEY (ID_CATEGORY) REFERENCES CATEGORY(ID));";
+
+    sql_create_product_similar = "CREATE TABLE PRODUCT_SIMILAR(" \
+    "ASIN_PRODUCT VARCHAR(11) NOT NULL, " \
+    "ASIN_SIMILAR VARCHAR(11) NOT NULL, "\
+    "PRIMARY KEY (ASIN_PRODUCT, ASIN_SIMILAR), " \
+    "FOREIGN KEY (ASIN_PRODUCT) REFERENCES PRODUCT(ASIN), "\
+    "FOREIGN KEY (ASIN_SIMILAR) REFERENCES PRODUCT(ASIN));";
+
+    sql_create_review = "CREATE TABLE REVIEW(" \
+    "ID INT PRIMARY KEY NOT NULL, " \
+    "PUBLIC_DATE DATE NOT NULL, "\
+    "CUSTOMER VARCHAR(15) NOT NULL, "\
+    "RATING INT NOT NULL, "\
+    "VOTES INT DEFAULT 0, "\
+    "HELPFUL INT, "\
+    "ASIN_PRODUCT VARCHAR(11) NOT NULL, "\
+    "FOREIGN KEY (ASIN_PRODUCT) REFERENCES PRODUCT(ASIN));";
+
+    transaction.exec(sql_create_category);
+    cout << "Table \"category\" created successfully\n";
+//    transaction.exec(sql_create_product);
+    cout << "Table \"product\" created successfully\n";
+    transaction.exec(sql_create_product_category);
+    cout << "Table \"product_category\" created successfully\n";
+//    transaction.exec(sql_create_product_similar);
+    cout << "Table \"product_similar\" created successfully\n";
+//    transaction.exec(sql_create_review);
+    cout << "Table \"review\" created successfully\n";
+    transaction.commit();
+}
+
+void insert_categories(unordered_map<int, Category> categories) {
+    string sql_insert;
+
+    for (auto it = categories.begin(); it != categories.end(); ++it) {
+        sql_insert = "INSERT INTO CATEGORY (ID, NAME) VALUES (";
+    //    sql_insert += string(it->first) + ", ";
+    }
+}
+
+void insert_products(connection& conn, vector<Product> products) {
+    int i, size;
+    string sql_insert;
+    work transaction(conn);
+
+    size = products.size();
+    sql_insert = "";
+    for (i = 0; i < size; i++) {
+        sql_insert += "INSERT INTO PRODUCT (ASIN, TITLE, PRODUCT_GROUP, SALESRANK, AVG_RATING, TOTAL_REVIEWS, DOWNLOADED)";
+        sql_insert += " VALUES ('" + products[i].asin + "', '" + products[i].title + "', '" + products[i].group + "', ";
+        sql_insert += to_string(products[i].salesrank) + ", " + to_string(products[i].avg_rating) + ", ";
+        sql_insert += to_string(products[i].total_reviews) + ", " + to_string(products[i].downloaded) + "); ";
+    }
+
+    cout << size << "\n";
+
+    transaction.exec(sql_insert);
+    transaction.commit();
+}
 
 void split(vector<string>& tokens, string str, const char delimiter[], bool first) {
     char *dup = strdup(str.c_str());
@@ -56,6 +152,16 @@ void split(vector<string>& tokens, string str, const char delimiter[], bool firs
     free(dup);
 }
 
+void normalize(string& str) {
+    size_t found;
+
+    found = str.find("'");
+    while(found != string::npos) {
+        str.insert(found, "'");
+        found = str.find("'", found+2);
+    }
+}
+
 bool is_number(const char str[]) {
     int len = strlen(str);
     int is_num = true;
@@ -70,7 +176,7 @@ bool is_number(const char str[]) {
     return is_num;
 }
 
-void read_data(const char filename[]) {
+void read_data(const char filename[], vector<Similar>& similars, unordered_map<int, Category>& categories, connection& conn) {
     ifstream file(filename);
     string buffer;
     Product record;
@@ -82,7 +188,7 @@ void read_data(const char filename[]) {
     int total_reviews;
 
     vector<string> tokens;
-    unordered_map<int, Category> categories;
+    vector<Product> products;
 
     // ignoring first comment
     getline(file, buffer);
@@ -96,7 +202,6 @@ void read_data(const char filename[]) {
 
     while (count_records < total_records) {
         getline(file, buffer);
-            //    cout << buffer << "\n";
 
         // reading id
         getline(file, buffer);
@@ -107,8 +212,6 @@ void read_data(const char filename[]) {
         // reading asin
         getline(file, buffer);
         split(tokens, buffer, ":", false);
-        // printf("asin: %s", tokens[1].c_str());
-        // std::cout << std::endl;
         record.asin = tokens[1];
 
         // reading title
@@ -119,47 +222,38 @@ void read_data(const char filename[]) {
             continue;
         }
         split(tokens, buffer, " ", true);
-        // printf("title: %s", tokens[1].c_str());
-        // std::cout << std::endl;
+        normalize(tokens[1]);
         record.title = tokens[1];
 
         // reading group
         getline(file, buffer);
         split(tokens, buffer, " ", true);
-        // printf("group: %s", tokens[1].c_str());
-        // std::cout << std::endl;
         record.group = tokens[1];
 
         // reading salesrank
         getline(file, buffer);
         split(tokens, buffer, " ", false);
-        // printf("salesrank: %s", tokens[1].c_str());
-        // std::cout << std::endl;
         record.salesrank = stoi(tokens[1]);
 
         // reading similars
         getline(file, buffer);
         split(tokens, buffer, " ", false);
-    //    cout << buffer << "\n";
         total_similars = stoi(tokens[1]);
-        // printf("similars: %d ", total_similars);
 
+        Similar similar;
         if(total_similars != 0) {
             for (int i = 2; i < total_similars+2; i++){
-                //printf("%s ", tokens[i].c_str());
-                record.similars.push_back(tokens[i]);
+                strcpy(similar.asin_product, record.asin.c_str());
+                strcpy(similar.asin_similar, tokens[i].c_str());
+                similars.push_back(similar);
             }
         }
-
-        cout << "\n";
 
         //reading categories
         getline(file, buffer);
         split(tokens, buffer, " ", false);
-    //    cout << buffer << "\n";
-        total_categories = stoi(tokens[1]);
 
-        // printf("categories: %d\n", total_categories);
+        total_categories = stoi(tokens[1]);
 
         if(total_categories != 0) {
 
@@ -167,10 +261,6 @@ void read_data(const char filename[]) {
                 getline(file, buffer);
                 split(tokens, buffer, "|[]", false);
 
-            /*    // indica que a primeira categoria não tem nome
-                int odd = false;
-                int inicio = 3;
-                if(tokens.size()%2 != 0) odd = true;*/
                 int inicio = 3;
 
                 int id;
@@ -178,7 +268,6 @@ void read_data(const char filename[]) {
 
                 category.parent_id = 0;
                 if(is_number(tokens[1].c_str())) {
-                    // cout << "odd aqui\n" << tokens[0] << " " << tokens[1] << "\n";
                     id = stoi(tokens[1]);
                     category.name = "";
                     inicio = 2;
@@ -187,8 +276,6 @@ void read_data(const char filename[]) {
                     category.name = tokens[1];
                 }
                 categories[id] = category;
-
-                // cout << "id " << id << " name " << category.name << " parent " << category.parent_id << "\n";
 
                 for (int j = inicio; j < tokens.size()-1; j+=2) {
                     category.parent_id = id;
@@ -203,7 +290,6 @@ void read_data(const char filename[]) {
                         id = stoi(tokens[j+2]);
                         j += 1;
                     }
-                    // cout << "id " << id << " name " << category.name << " parent " << category.parent_id << "\n";
                     categories[id] = category;
                 }
             }
@@ -214,8 +300,8 @@ void read_data(const char filename[]) {
         getline(file, buffer);
         split(tokens, buffer, " ", false);
 
-        // cout << "total reviews: " << tokens[2] << " downloaded: " << tokens[4] << " avg_rating: " << tokens[7] << "\n";
         total_reviews = stoi(tokens[4]);
+        record.total_reviews = total_reviews;
 
         if(total_reviews != 0) {
 
@@ -229,19 +315,35 @@ void read_data(const char filename[]) {
                 review_record.rating = stoi(tokens[4]);
                 review_record.votes = stoi(tokens[6]);
                 review_record.helpful = stoi(tokens[8]);
-                // cout << review_record.date << " customer: " << review_record.customer << " rating: " << review_record.rating << "  votes: " << review_record.votes << " helpful: "<< review_record.helpful << "\n";
-                // cout << review_record.helpful << "\n";
                 record.reviews.push_back(review_record);
             }
         }
-        //printf("%s\n", buffer);
         buffer.clear();
+
+    //    insert_product(conn, record);
+        products.push_back(record);
+        if(count_records % 250 == 0 && count_records > 0) {
+            printf("count_records: %d\n", count_records);
+            insert_products(conn, products);
+            products.clear();
+        }
+
         count_records++;
-        printf("count_records: %d\n", count_records);
       }
 }
 
 
 int main() {
-    read_data("amazon-meta.txt");
+    vector<Similar> similars;
+    unordered_map<int, Category> categories;
+
+    connection conn("dbname=trab1 user=anavi password=admin hostaddr=127.0.0.1 port=5432");
+    if (conn.is_open()) {
+        cout << "Opened database successfully: " << conn.dbname() << "\n";
+    } else {
+        cout << "Can't open database\n";
+    }
+
+    //create_tables(conn);
+    read_data("amazon-meta.txt", similars, categories, conn);
 }
