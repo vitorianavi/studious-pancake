@@ -15,7 +15,7 @@ typedef struct {
 
 typedef struct {
     char date[11];
-    string customer;
+    string costumer;
     int rating;
     int votes;
     int helpful;
@@ -77,24 +77,24 @@ void create_tables(connection& conn) {
     "FOREIGN KEY (ASIN_SIMILAR) REFERENCES PRODUCT(ASIN));";
 
     sql_create_review = "CREATE TABLE REVIEW(" \
-    "ID INT PRIMARY KEY NOT NULL, " \
+    "ID SERIAL PRIMARY KEY NOT NULL, " \
     "PUBLIC_DATE DATE NOT NULL, "\
-    "CUSTOMER VARCHAR(15) NOT NULL, "\
+    "COSTUMER VARCHAR(15) NOT NULL, "\
     "RATING INT NOT NULL, "\
     "VOTES INT DEFAULT 0, "\
     "HELPFUL INT, "\
     "ASIN_PRODUCT VARCHAR(11) NOT NULL, "\
     "FOREIGN KEY (ASIN_PRODUCT) REFERENCES PRODUCT(ASIN));";
 
-    transaction.exec(sql_create_category);
+    //transaction.exec(sql_create_category);
     cout << "Table \"category\" created successfully\n";
-//    transaction.exec(sql_create_product);
+    //transaction.exec(sql_create_product);
     cout << "Table \"product\" created successfully\n";
-    transaction.exec(sql_create_product_category);
+    //transaction.exec(sql_create_product_category);
     cout << "Table \"product_category\" created successfully\n";
-//    transaction.exec(sql_create_product_similar);
+    //transaction.exec(sql_create_product_similar);
     cout << "Table \"product_similar\" created successfully\n";
-//    transaction.exec(sql_create_review);
+    transaction.exec(sql_create_review);
     cout << "Table \"review\" created successfully\n";
     transaction.commit();
 }
@@ -108,24 +108,69 @@ void insert_categories(unordered_map<int, Category> categories) {
     }
 }
 
-void insert_products(connection& conn, vector<Product> products) {
-    int i, size;
+void insert_similars(connection& conn, vector<Similar> similars) {
+    int i, size, str_length;
     string sql_insert;
     work transaction(conn);
 
-    size = products.size();
-    sql_insert = "";
+    size = similars.size();
+
+    cout << "Inserting similars...\n";
+    sql_insert = "INSERT INTO PRODUCT_SIMILAR (ASIN_PRODUCT, ASIN_SIMILAR) VALUES ";
     for (i = 0; i < size; i++) {
-        sql_insert += "INSERT INTO PRODUCT (ASIN, TITLE, PRODUCT_GROUP, SALESRANK, AVG_RATING, TOTAL_REVIEWS, DOWNLOADED)";
-        sql_insert += " VALUES ('" + products[i].asin + "', '" + products[i].title + "', '" + products[i].group + "', ";
-        sql_insert += to_string(products[i].salesrank) + ", " + to_string(products[i].avg_rating) + ", ";
-        sql_insert += to_string(products[i].total_reviews) + ", " + to_string(products[i].downloaded) + "); ";
+        sql_insert += "('" + to_string(similars[i].asin_product) + "', '";
+        sql_insert += to_string(similars[i].asin_similar) + "'),";
     }
 
-    cout << size << "\n";
+    str_length = sql_insert.length();
+    sql_insert.at(str_length-1) = ';';
 
     transaction.exec(sql_insert);
     transaction.commit();
+}
+
+void insert_reviews(connection& conn, string asin_product, vector<Review> reviews) {
+    int i, size, str_length;
+    string sql_insert;
+    work transaction(conn);
+
+    size = reviews.size();
+
+    cout << "Inserting reviews...\n";
+
+    sql_insert = "INSERT INTO REVIEW (PUBLIC_DATE, COSTUMER, RATING, VOTES, HELPFUL, ASIN_PRODUCT) VALUES ";
+    for (i = 0; i < size; i++) {
+        sql_insert += "('" + to_string(reviews[i].date) + "', '" + reviews[i].costumer + "', ";
+        sql_insert += to_string(reviews[i].rating) + ", " + to_string(reviews[i].votes) + ", ";
+        sql_insert += to_string(reviews[i].helpful) + ", '" + asin_product + "'),";
+    }
+
+    str_length = sql_insert.length();
+    sql_insert.at(str_length-1) = ';';
+
+    transaction.exec(sql_insert);
+    transaction.commit();
+}
+
+void insert_products(connection& conn, vector<Product> products) {
+    int i, size;
+    string sql_insert;
+
+    size = products.size();
+    for (i = 0; i < size; i++) {
+        work transaction(conn);
+
+        cout << "Product: " << products[i].asin << "\n";
+        sql_insert = "INSERT INTO PRODUCT (ASIN, TITLE, PRODUCT_GROUP, SALESRANK, AVG_RATING, TOTAL_REVIEWS, DOWNLOADED)";
+        sql_insert += " VALUES ('" + products[i].asin + "', '" + products[i].title + "', '" + products[i].group + "', ";
+        sql_insert += to_string(products[i].salesrank) + ", " + to_string(products[i].avg_rating) + ", ";
+        sql_insert += to_string(products[i].total_reviews) + ", " + to_string(products[i].downloaded) + ");";
+
+        transaction.exec(sql_insert);
+        transaction.commit();
+
+        insert_reviews(conn, products[i].asin, products[i].reviews);
+    }
 }
 
 void split(vector<string>& tokens, string str, const char delimiter[], bool first) {
@@ -311,7 +356,7 @@ void read_data(const char filename[], vector<Similar>& similars, unordered_map<i
                 getline(file, buffer);
                 split(tokens, buffer, " ", false);
                 strcpy(review_record.date, tokens[0].c_str());
-                review_record.customer = tokens[2];
+                review_record.costumer = tokens[2];
                 review_record.rating = stoi(tokens[4]);
                 review_record.votes = stoi(tokens[6]);
                 review_record.helpful = stoi(tokens[8]);
@@ -322,7 +367,7 @@ void read_data(const char filename[], vector<Similar>& similars, unordered_map<i
 
     //    insert_product(conn, record);
         products.push_back(record);
-        if(count_records % 250 == 0 && count_records > 0) {
+        if(count_records % 100 == 0 && count_records > 0) {
             printf("count_records: %d\n", count_records);
             insert_products(conn, products);
             products.clear();
@@ -330,6 +375,8 @@ void read_data(const char filename[], vector<Similar>& similars, unordered_map<i
 
         count_records++;
       }
+
+      insert_similars(conn, similars);
 }
 
 
@@ -337,7 +384,7 @@ int main() {
     vector<Similar> similars;
     unordered_map<int, Category> categories;
 
-    connection conn("dbname=trab1 user=anavi password=admin hostaddr=127.0.0.1 port=5432");
+    connection conn("dbname=trab1 user=clara password=admin hostaddr=127.0.0.1 port=5432");
     if (conn.is_open()) {
         cout << "Opened database successfully: " << conn.dbname() << "\n";
     } else {
