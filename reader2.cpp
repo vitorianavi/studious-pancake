@@ -124,7 +124,6 @@ void insert_category(connection& conn, int id, Category category) {
 void insert_product_category(connection& conn, vector<Product_category> product_category) {
     int i, size, str_length;
     string sql_insert;
-    char record[50];
 //    work transaction(conn);
 
     size = product_category.size();
@@ -132,10 +131,8 @@ void insert_product_category(connection& conn, vector<Product_category> product_
     //cout << "Inserting Product_Category...\n";
     sql_insert = "INSERT INTO PRODUCT_CATEGORY (ASIN_PRODUCT, ID_CATEGORY) VALUES ";
     for (i = 0; i < size; i++) {
-        sprintf(record, "(%s, %d),", product_category[i].asin_product, product_category[i].id_category);
-    /*    sql_insert += "('" + to_string(product_category[i].asin_product) + "', '";
-        sql_insert += to_string(product_category[i].id_category) + "'),";*/
-        sql_insert += to_string(record);
+        sql_insert += "('" + to_string(product_category[i].asin_product) + "', '";
+        sql_insert += to_string(product_category[i].id_category) + "'),";
     }
 
     str_length = sql_insert.length();
@@ -148,7 +145,6 @@ void insert_product_category(connection& conn, vector<Product_category> product_
 void insert_similars(connection& conn, vector<Similar> similars) {
     int i, size, str_length;
     string sql_insert;
-    char record[50];
 //    work transaction(conn);
 
     size = similars.size();
@@ -156,10 +152,8 @@ void insert_similars(connection& conn, vector<Similar> similars) {
 //    cout << "Inserting similars...\n";
     sql_insert = "INSERT INTO PRODUCT_SIMILAR (ASIN_PRODUCT, ASIN_SIMILAR) VALUES ";
     for (i = 0; i < size; i++) {
-        sprintf(record, "(%s, %s),", similars[i].asin_product, similars[i].asin_similar);
-        /*sql_insert += "('" + to_string(similars[i].asin_product) + "', '";
-        sql_insert += to_string(similars[i].asin_similar) + "'),";*/
-        sql_insert += to_string(record);
+        sql_insert += "('" + to_string(similars[i].asin_product) + "', '";
+        sql_insert += to_string(similars[i].asin_similar) + "'),";
     }
 
     str_length = sql_insert.length();
@@ -169,65 +163,49 @@ void insert_similars(connection& conn, vector<Similar> similars) {
 //    transaction.commit();
 }
 
-void insert_reviews(connection& conn, vector<Product> products) {
-    int i, j, prod_size, review_size, str_length;
+void insert_reviews(connection& conn, string asin_product, vector<Review> reviews) {
+    int i, size, str_length;
     string sql_insert;
-    char record[600];
 //    work transaction(conn);
 
-    prod_size = products.size();
+    size = reviews.size();
 
-    //cout << "Inserting reviews...\n";
+//    cout << "Inserting reviews...\n";
 
-
-    for (i = 0; i < prod_size; i++) {
-        review_size = products[i].reviews.size();
-        sql_insert = "INSERT INTO REVIEW (PUBLIC_DATE, COSTUMER, RATING, VOTES, HELPFUL, ASIN_PRODUCT) VALUES ";
-        for (j = 0; j < review_size; j++) {
-            sprintf(record, "(%s, %s, %d, %d, %d, %s);", products[i].reviews[j].date, products[i].reviews[j].costumer.c_str(),
-            products[i].reviews[j].rating, products[i].reviews[j].votes, products[i].reviews[j].helpful,
-            products[i].asin.c_str());
-        /*    sql_insert += "('" + to_string(reviews[i].date) + "', '" + reviews[i].costumer + "', ";
-            sql_insert += to_string(reviews[i].rating) + ", " + to_string(reviews[i].votes) + ", ";
-            sql_insert += to_string(reviews[i].helpful) + ", '" + asin_product + "'),";*/
-            sql_insert += to_string(record);
-        }
-
-        //    transaction.exec(sql_insert);
-        //    transaction.commit();
+    sql_insert = "INSERT INTO REVIEW (PUBLIC_DATE, COSTUMER, RATING, VOTES, HELPFUL, ASIN_PRODUCT) VALUES ";
+    for (i = 0; i < size; i++) {
+        sql_insert += "('" + to_string(reviews[i].date) + "', '" + reviews[i].costumer + "', ";
+        sql_insert += to_string(reviews[i].rating) + ", " + to_string(reviews[i].votes) + ", ";
+        sql_insert += to_string(reviews[i].helpful) + ", '" + asin_product + "'),";
     }
 
-/*    str_length = sql_insert.length();
+    str_length = sql_insert.length();
     sql_insert.at(str_length-1) = ';';
-*/
 
+//    transaction.exec(sql_insert);
+//    transaction.commit();
 }
 
 void insert_products(connection& conn, vector<Product> products) {
     int i, size;
     string sql_insert;
-    char record[900];
 
     size = products.size();
 
-    sql_insert = "INSERT INTO PRODUCT (ASIN, TITLE, PRODUCT_GROUP, SALESRANK, AVG_RATING, TOTAL_REVIEWS, DOWNLOADED) VALUES ";
     for (i = 0; i < size; i++) {
 //        work transaction(conn);
 
-    //    cout << "Product: " << products[i].asin << "\n";
-
-        sprintf(record, "(%s, %s, %s, %d, %f, %d, %d),", products[i].asin.c_str(), products[i].title.c_str(), products[i].group.c_str(),
-        products[i].salesrank, products[i].avg_rating, products[i].total_reviews, products[i].downloaded);
-/*        sql_insert += " VALUES ('" + products[i].asin + "', '" + products[i].title + "', '" + products[i].group + "', ";
+//        cout << "Product: " << products[i].asin << "\n";
+        sql_insert = "INSERT INTO PRODUCT (ASIN, TITLE, PRODUCT_GROUP, SALESRANK, AVG_RATING, TOTAL_REVIEWS, DOWNLOADED)";
+        sql_insert += " VALUES ('" + products[i].asin + "', '" + products[i].title + "', '" + products[i].group + "', ";
         sql_insert += to_string(products[i].salesrank) + ", " + to_string(products[i].avg_rating) + ", ";
-        sql_insert += to_string(products[i].total_reviews) + ", " + to_string(products[i].downloaded) + ");";*/
-
-        sql_insert += to_string(record);
+        sql_insert += to_string(products[i].total_reviews) + ", " + to_string(products[i].downloaded) + ");";
 
 //        transaction.exec(sql_insert);
 //        transaction.commit();
+
+        insert_reviews(conn, products[i].asin, products[i].reviews);
     }
-    insert_reviews(conn, products);
 }
 
 void split(vector<string>& tokens, string str, const char delimiter[], bool first) {
@@ -308,13 +286,13 @@ void read_data(const char filename[], vector<Similar>& similars, unordered_map<i
 
         // reading id
         getline(file, buffer);
-        split(tokens, buffer, ": ", false);
-    //    printf("id: %s\n", tokens[1].c_str());
+        split(tokens, buffer, ":", false);
+        printf("id: %s ", tokens[1].c_str());
         record.id = stoi(tokens[1]);
 
         // reading asin
         getline(file, buffer);
-        split(tokens, buffer, ": ", false);
+        split(tokens, buffer, ":", false);
         record.asin = tokens[1];
         strcpy(p_cat.asin_product, tokens[1].c_str());
 
@@ -383,7 +361,7 @@ void read_data(const char filename[], vector<Similar>& similars, unordered_map<i
 
                 if(categories.count(id) == 0) {
                     categories[id] = category;
-                //    insert_category(conn, id, category);
+                    insert_category(conn, id, category);
                     product_category.push_back(p_cat);
                 }
 
@@ -406,7 +384,7 @@ void read_data(const char filename[], vector<Similar>& similars, unordered_map<i
 
                     if(categories.count(id) == 0) {
                         categories[id] = category;
-                //        insert_category(conn, id, category);
+                        insert_category(conn, id, category);
                         product_category.push_back(p_cat);
                     }
                 }
@@ -442,15 +420,15 @@ void read_data(const char filename[], vector<Similar>& similars, unordered_map<i
         products.push_back(record);
         if(count_records % 100 == 0 && count_records > 0) {
             printf("count_records: %d\n", count_records);
-        //    insert_products(conn, products);
+            insert_products(conn, products);
             products.clear();
         }
 
         count_records++;
       }
 
-      //insert_similars(conn, similars);
-      //insert_product_category(conn, product_category);
+      insert_similars(conn, similars);
+      insert_product_category(conn, product_category);
 }
 
 
