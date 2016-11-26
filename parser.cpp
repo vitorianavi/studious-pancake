@@ -66,7 +66,7 @@ string read_asin(ifstream& file) {
 
     getline(file, buffer);
     split(tokens, buffer, ": ", false);
-    return tokens[1];
+    return tokens[1].substr(0, tokens[1].size()-1);
 }
 
 string read_title(ifstream& file) {
@@ -81,7 +81,7 @@ string read_title(ifstream& file) {
     split(tokens, buffer, " ", true);
     normalize(tokens[1]);
 
-    return tokens[1];
+    return tokens[1].substr(0, tokens[1].size()-1);;
 }
 
 string read_group(ifstream& file) {
@@ -89,8 +89,8 @@ string read_group(ifstream& file) {
     vector<string> tokens;
 
     getline(file, buffer);
-    split(tokens, buffer, " ", true);
-    return tokens[1];
+    split(tokens, buffer, " \r", true);
+    return tokens[1].substr(0, tokens[1].size()-1);;
 }
 
 int read_salesrank(ifstream& file) {
@@ -131,7 +131,6 @@ void read_categories(vector<int>& categories, ifstream& file, unordered_map<int,
 
     for (int i = 0; i < total_categories; i++) {
         getline(file, buffer);
-        cout << buffer << "\n";
         split(tokens, buffer, "|[]", false);
 
         int inicio = 3;
@@ -144,14 +143,13 @@ void read_categories(vector<int>& categories, ifstream& file, unordered_map<int,
             category.name = "";
             inicio = 2;
         } else {
-            cout << tokens[2] << "\n";
             category.id = stoi(tokens[2]);
             category.name = tokens[1];
         }
 
         if(hash_categories.count(category.id) == 0) {
             hash_categories[category.id] = true;
-            //insert_category(transaction, record.id, category);
+            insert_category(transaction, category);
         }
 
         for (int j = inicio; j < tokens.size()-1; j+=2) {
@@ -162,7 +160,6 @@ void read_categories(vector<int>& categories, ifstream& file, unordered_map<int,
             if(is_number(tokens[j+1].c_str())) {
                 category.id = stoi(tokens[j+1]);
             } else {
-                cout << tokens[j+1] << "\n";
                 category.name += "[" + tokens[j+1] + "]";
                 category.id = stoi(tokens[j+2]);
                 j += 1;
@@ -170,7 +167,7 @@ void read_categories(vector<int>& categories, ifstream& file, unordered_map<int,
 
             if(hash_categories.count(category.id) == 0) {
                 hash_categories[category.id] = true;
-                //insert_category(transaction, record.id, category);
+                insert_category(transaction, category);
             }
         }
         categories.push_back(category.id);
@@ -208,10 +205,10 @@ void read_data(const char filename[], vector<Similar>& similars, unordered_map<i
     Product record;
 
     int total_records;
+    int total_reviews;
     int count_records = 0;
 
     vector<string> tokens;
-    //vector<Product> products(100);
 
     // ignoring first comment
     getline(file, buffer);
@@ -227,6 +224,7 @@ void read_data(const char filename[], vector<Similar>& similars, unordered_map<i
         count_records += 1;
 
         work transaction(conn);
+
         getline(file, buffer);
 
         record.id = read_id(file);
@@ -239,20 +237,28 @@ void read_data(const char filename[], vector<Similar>& similars, unordered_map<i
         record.salesrank = read_salesrank(file);
         read_similars(similars, file, record.asin);
         read_categories(record.categories, file, hash_categories, transaction);
-        read_reviews(record.reviews, file);
+        total_reviews = read_reviews(record.reviews, file);
 
-        //insert_product(transaction, record);
-        //insert_product_categories(transaction, products_categories);
-        insert_reviews(transaction, record);
-        buffer.clear();
+        insert_product(transaction, record);
 
+        for (auto category:record.categories) {
+            insert_product_category(transaction, record.asin, category);
+        }
+
+        if(total_reviews > 0) {
+            insert_reviews(transaction, record);
+        }
         transaction.commit();
+
+        record.categories.clear();
+        record.reviews.clear();
         cout << " Records: " << count_records << '\n';
       }
-     // work transaction(conn);
-      //insert_similars(transaction, similars);
+
+      work transaction(conn);
+      insert_similars(transaction, similars);
     //  insert_product_category(transaction, product_category);
-      //transaction.commit();
+      transaction.commit();
 }
 
 
@@ -268,6 +274,6 @@ int main() {
         cout << "Can't open database\n";
     }
 
-    //create_tables(conn);
+    // create_tables(conn);
     read_data("amazon-meta.txt", similars, categories, conn);
 }

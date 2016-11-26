@@ -13,7 +13,7 @@ void create_tables(connection& conn) {
 
     sql_create_category = "CREATE TABLE CATEGORY(" \
     "ID INT PRIMARY KEY NOT NULL, " \
-    "NAME VARCHAR(50), "\
+    "NAME VARCHAR(100), "\
     "ID_PARENT INT, "\
     "FOREIGN KEY (ID_PARENT) REFERENCES CATEGORY(ID));";
 
@@ -61,11 +61,11 @@ void create_tables(connection& conn) {
     transaction.commit();
 }
 
-void insert_category(work& transaction, int id, Category category) {
+void insert_category(work& transaction, Category category) {
     string sql_insert;
 
     sql_insert = "INSERT INTO CATEGORY (ID, NAME, ID_PARENT) VALUES (";
-    sql_insert += to_string(id) + ", '" + category.name + "', ";
+    sql_insert += to_string(category.id) + ", '" + category.name + "', ";
     if(category.parent_id != 0) {
         sql_insert += to_string(category.parent_id);
     } else {
@@ -76,24 +76,25 @@ void insert_category(work& transaction, int id, Category category) {
     transaction.exec(sql_insert);
 }
 
-void insert_product_category(work& transaction, string asin_product, string asin_similar) {
+void insert_product_category(work& transaction, string asin_product, int id_category) {
     string sql_insert;
 
-    cout << "Inserting Product_Category...\n";
+    //cout << "Inserting Product_Category...\n";
     sql_insert = "INSERT INTO PRODUCT_CATEGORY (ASIN_PRODUCT, ID_CATEGORY) VALUES ('";
-    sql_insert += asin_product + "', " + asin_similar + ");";
+    sql_insert += asin_product + "', " + to_string(id_category) + ");";
 
+//    cout << sql_insert << endl;
 
     transaction.exec(sql_insert);
 }
 
-void insert_similar(work& transaction, vector<Similar> similars) {
+void insert_similars(work& transaction, vector<Similar> similars) {
     int i, size, str_length;
     string sql_insert;
 
     size = similars.size();
 
-    cout << "Inserting similars...\n";
+    //cout << "Inserting similars...\n";
     sql_insert = "INSERT INTO PRODUCT_SIMILAR (ASIN_PRODUCT, ASIN_SIMILAR) VALUES ";
     for (i = 0; i < size; i++) {
         sql_insert += "('" + similars[i].asin_product + "','" + similars[i].asin_similar + "'),";
@@ -109,7 +110,7 @@ void insert_reviews(work& transaction, Product product) {
     int i, review_size, str_length;
     string sql_insert;
 
-    cout << "Inserting reviews...\n";
+    //cout << "Inserting reviews...\n";
     review_size = product.reviews.size();
     sql_insert = "INSERT INTO REVIEW (PUBLIC_DATE, COSTUMER, RATING, VOTES, HELPFUL, ASIN_PRODUCT) VALUES ";
     for (i = 0; i < review_size; i++) {
@@ -127,12 +128,11 @@ void insert_reviews(work& transaction, Product product) {
 
 void insert_product(work& transaction, Product product) {
     string sql_insert;
-    //work transaction(conn);
-    cout << "Inserindo product:" << product.asin << '\n';
+
+    //cout << "Inserindo product:" << product.asin << '\n';
 
     sql_insert = "INSERT INTO PRODUCT (ASIN, TITLE, PRODUCT_GROUP, SALESRANK, DOWNLOADED)";
     sql_insert += " VALUES ('" + product.asin + "', '" + product.title + "', '" + product.group + "', ";
     sql_insert += to_string(product.salesrank) + ", " + to_string(product.downloaded) + ");";
     transaction.exec(sql_insert);
-    //transaction.commit();
 }
