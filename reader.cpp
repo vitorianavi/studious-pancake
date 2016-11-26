@@ -450,7 +450,7 @@ void read_data(const char filename[], vector<Similar>& similars, unordered_map<i
       }
 
       //insert_similars(conn, similars);
-      //insert_product_category(conn, product_category);
+      //insert_product_category(conn, product_category);sass
 }
 
 
