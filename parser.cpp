@@ -202,10 +202,8 @@ int read_reviews(vector<Review>& reviews, ifstream& file) {
 void read_data(const char filename[], vector<Similar>& similars, unordered_map<int, bool>& hash_categories, connection& conn) {
     ifstream file(filename);
     string buffer;
-    Product record;
 
     int total_records;
-    int total_reviews;
     int count_records = 0;
 
     vector<string> tokens;
@@ -221,23 +219,28 @@ void read_data(const char filename[], vector<Similar>& similars, unordered_map<i
     printf("total records: %d\n", total_records);
 
     while (count_records < total_records) {
-        count_records += 1;
-
+        Product record;
+        bool discontinued;
+        int total_reviews = 0;
         work transaction(conn);
+
+        count_records += 1;
 
         getline(file, buffer);
 
         record.id = read_id(file);
         record.asin = read_asin(file);
         record.title = read_title(file);
-        //cout << record.id << "\n" << record.asin << "\n" << record.title << "\n";
-        if(record.title.empty()) continue;
 
-        record.group = read_group(file);
-        record.salesrank = read_salesrank(file);
-        read_similars(similars, file, record.asin);
-        read_categories(record.categories, file, hash_categories, transaction);
-        total_reviews = read_reviews(record.reviews, file);
+        discontinued = record.title.empty();
+        //cout << record.id << "\n" << record.asin << "\n" << record.title << "\n";
+        if(!discontinued) {
+            record.group = read_group(file);
+            record.salesrank = read_salesrank(file);
+            read_similars(similars, file, record.asin);
+            read_categories(record.categories, file, hash_categories, transaction);
+            total_reviews = read_reviews(record.reviews, file);
+        }
 
         insert_product(transaction, record);
 
@@ -248,19 +251,16 @@ void read_data(const char filename[], vector<Similar>& similars, unordered_map<i
         if(total_reviews > 0) {
             insert_reviews(transaction, record);
         }
+
         transaction.commit();
 
-        record.categories.clear();
-        record.reviews.clear();
         cout << " Records: " << count_records << '\n';
       }
 
       work transaction(conn);
       insert_similars(transaction, similars);
-    //  insert_product_category(transaction, product_category);
       transaction.commit();
 }
-
 
 int main() {
     vector<Similar> similars(5000);
@@ -274,6 +274,6 @@ int main() {
         cout << "Can't open database\n";
     }
 
-    // create_tables(conn);
+     create_tables(conn);
     read_data("amazon-meta.txt", similars, categories, conn);
 }

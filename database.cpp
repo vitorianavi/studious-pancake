@@ -98,6 +98,7 @@ void insert_similars(work& transaction, vector<Similar> similars) {
     sql_insert = "INSERT INTO PRODUCT_SIMILAR (ASIN_PRODUCT, ASIN_SIMILAR) VALUES ";
     for (i = 0; i < size; i++) {
         sql_insert += "('" + similars[i].asin_product + "','" + similars[i].asin_similar + "'),";
+        cout << similars[i].asin_product << "\n" << similars[i].asin_similar << endl;
     }
 
     str_length = sql_insert.length();
