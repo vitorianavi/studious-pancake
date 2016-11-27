@@ -88,21 +88,13 @@ void insert_product_category(work& transaction, string asin_product, int id_cate
     transaction.exec(sql_insert);
 }
 
-void insert_similars(work& transaction, vector<Similar> similars) {
-    int i, size, str_length;
+void insert_similar(work& transaction, Similar similar) {
     string sql_insert;
-
-    size = similars.size();
 
     //cout << "Inserting similars...\n";
     sql_insert = "INSERT INTO PRODUCT_SIMILAR (ASIN_PRODUCT, ASIN_SIMILAR) VALUES ";
-    for (i = 0; i < size; i++) {
-        sql_insert += "('" + similars[i].asin_product + "','" + similars[i].asin_similar + "'),";
-        cout << similars[i].asin_product << "\n" << similars[i].asin_similar << endl;
-    }
-
-    str_length = sql_insert.length();
-    sql_insert.at(str_length-1) = ';';
+    sql_insert += "('" + similar.asin_product + "','" + similar.asin_similar + "');";
+    cout << similar.asin_similar << endl;
 
     transaction.exec(sql_insert);
 }

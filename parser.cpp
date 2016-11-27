@@ -1,3 +1,4 @@
+
 #include "database.cpp"
 #include <pqxx/pqxx>
 
@@ -90,7 +91,7 @@ string read_group(ifstream& file) {
 
     getline(file, buffer);
     split(tokens, buffer, " \r", true);
-    return tokens[1].substr(0, tokens[1].size()-1);;
+    return tokens[1].substr(0, tokens[1].size()-1);
 }
 
 int read_salesrank(ifstream& file) {
@@ -106,15 +107,23 @@ void read_similars(vector<Similar>& similars, ifstream& file, string prod_asin) 
     string buffer;
     vector<string> tokens;
     Similar similar;
-    int total_similars;
+    int i, total_similars;
 
     getline(file, buffer);
     split(tokens, buffer, " ", false);
     total_similars = stoi(tokens[1]);
 
-    for (int i = 2; i < total_similars+2; i++) {
-        similar.asin_product = prod_asin;
+    similar.asin_product = prod_asin;
+    for (i = 2; i < total_similars+1; i++) {
         similar.asin_similar = tokens[i];
+
+        similars.push_back(similar);
+
+    //    cout << similar.asin_product << "\n" << similar.asin_similar << endl;
+    }
+
+    if(total_similars) {
+        similar.asin_similar = tokens[i].substr(0, tokens[i].size()-1);
         similars.push_back(similar);
     }
 }
@@ -149,7 +158,7 @@ void read_categories(vector<int>& categories, ifstream& file, unordered_map<int,
 
         if(hash_categories.count(category.id) == 0) {
             hash_categories[category.id] = true;
-            insert_category(transaction, category);
+            //insert_category(transaction, category);
         }
 
         for (int j = inicio; j < tokens.size()-1; j+=2) {
@@ -167,7 +176,7 @@ void read_categories(vector<int>& categories, ifstream& file, unordered_map<int,
 
             if(hash_categories.count(category.id) == 0) {
                 hash_categories[category.id] = true;
-                insert_category(transaction, category);
+                //insert_category(transaction, category);
             }
         }
         categories.push_back(category.id);
@@ -207,6 +216,7 @@ void read_data(const char filename[], vector<Similar>& similars, unordered_map<i
     int count_records = 0;
 
     vector<string> tokens;
+    unordered_map<string, bool> products;
 
     // ignoring first comment
     getline(file, buffer);
@@ -242,28 +252,40 @@ void read_data(const char filename[], vector<Similar>& similars, unordered_map<i
             total_reviews = read_reviews(record.reviews, file);
         }
 
-        insert_product(transaction, record);
+        products[record.asin] = true;
 
-        for (auto category:record.categories) {
+    /*    for (auto similar:similars) {
+            cout << similar.asin_similar << "\n";
+        }*/
+
+        //insert_product(transaction, record);
+
+    /*    for (auto category:record.categories) {
             insert_product_category(transaction, record.asin, category);
         }
 
         if(total_reviews > 0) {
             insert_reviews(transaction, record);
-        }
+        }*/
 
         transaction.commit();
 
-        cout << " Records: " << count_records << '\n';
+    //    cout << " Records: " << count_records << '\n';
       }
 
-      work transaction(conn);
-      insert_similars(transaction, similars);
-      transaction.commit();
+    work transaction(conn);
+        for (auto similar:similars) {
+        //  cout << similar.asin_similar << "\n";
+        if(products.count(similar.asin_similar)) {
+            insert_similar(transaction, similar);
+        }
+    }
+
+    transaction.commit();
 }
 
 int main() {
-    vector<Similar> similars(5000);
+    vector<Similar> similars;
     unordered_map<int, bool> categories;
 
     connection conn("dbname=trab1 user=anavi password=admin hostaddr=127.0.0.1 port=5432");
@@ -274,6 +296,6 @@ int main() {
         cout << "Can't open database\n";
     }
 
-     create_tables(conn);
+//     create_tables(conn);
     read_data("amazon-meta.txt", similars, categories, conn);
 }
