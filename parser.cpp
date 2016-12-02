@@ -1,8 +1,4 @@
-
-#include "database.cpp"
-#include <pqxx/pqxx>
-
-using namespace pqxx;
+#include "parser.hpp"
 
 void split(vector<string>& tokens, string str, const char delimiter[], bool first) {
     char *dup = strdup(str.c_str());
@@ -284,6 +280,7 @@ void read_data(const char filename[], vector<Similar>& similars, unordered_map<i
     transaction.commit();
 }
 
+/*
 int main() {
     vector<Similar> similars;
     unordered_map<int, bool> categories;
@@ -298,4 +295,4 @@ int main() {
 
 //     create_tables(conn);
     read_data("amazon-meta.txt", similars, categories, conn);
-}
+}*/

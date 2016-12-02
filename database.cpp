@@ -1,7 +1,4 @@
-#include <pqxx/pqxx>
-#include "classes.hpp"
-
-using namespace pqxx;
+#include "database.hpp"
 
 void create_tables(connection& conn) {
     string sql_create_category;
