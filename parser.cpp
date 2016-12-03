@@ -1,4 +1,8 @@
-#include "parser.hpp"
+
+#include "database.cpp"
+#include <pqxx/pqxx>
+
+using namespace pqxx;
 
 void split(vector<string>& tokens, string str, const char delimiter[], bool first) {
     char *dup = strdup(str.c_str());
@@ -154,7 +158,7 @@ void read_categories(vector<int>& categories, ifstream& file, unordered_map<int,
 
         if(hash_categories.count(category.id) == 0) {
             hash_categories[category.id] = true;
-            //insert_category(transaction, category);
+            insert_category(transaction, category);
         }
 
         for (int j = inicio; j < tokens.size()-1; j+=2) {
@@ -172,7 +176,7 @@ void read_categories(vector<int>& categories, ifstream& file, unordered_map<int,
 
             if(hash_categories.count(category.id) == 0) {
                 hash_categories[category.id] = true;
-                //insert_category(transaction, category);
+                insert_category(transaction, category);
             }
         }
         categories.push_back(category.id);
@@ -250,28 +254,28 @@ void read_data(const char filename[], vector<Similar>& similars, unordered_map<i
 
         products[record.asin] = true;
 
-    /*    for (auto similar:similars) {
-            cout << similar.asin_similar << "\n";
-        }*/
+        // for (auto similar:similars) {
+        //     cout << similar.asin_similar << "\n";
+        // }
 
-        //insert_product(transaction, record);
+        insert_product(transaction, record);
 
-    /*    for (auto category:record.categories) {
+        for (auto category:record.categories) {
             insert_product_category(transaction, record.asin, category);
         }
 
         if(total_reviews > 0) {
             insert_reviews(transaction, record);
-        }*/
+        }
 
         transaction.commit();
 
-    //    cout << " Records: " << count_records << '\n';
+        cout << " Records: " << count_records << '\n';
       }
 
     work transaction(conn);
         for (auto similar:similars) {
-        //  cout << similar.asin_similar << "\n";
+          cout << similar.asin_similar << "\n";
         if(products.count(similar.asin_similar)) {
             insert_similar(transaction, similar);
         }
@@ -280,12 +284,11 @@ void read_data(const char filename[], vector<Similar>& similars, unordered_map<i
     transaction.commit();
 }
 
-/*
 int main() {
     vector<Similar> similars;
     unordered_map<int, bool> categories;
 
-    connection conn("dbname=trab1 user=anavi password=admin hostaddr=127.0.0.1 port=5432");
+    connection conn("dbname=trab1 user=clara password=admin hostaddr=127.0.0.1 port=5432");
     if (conn.is_open()) {
         cout << "Opened database successfully: " << conn.dbname() << "\n";
 
@@ -293,6 +296,6 @@ int main() {
         cout << "Can't open database\n";
     }
 
-//     create_tables(conn);
+    //create_tables(conn);
     read_data("amazon-meta.txt", similars, categories, conn);
-}*/
+}

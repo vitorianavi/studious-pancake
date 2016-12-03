@@ -1,8 +1,10 @@
 #include <iomanip>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <chplot.h>
 #include "geral.hpp"
 #include "TextTable.h"
+
 
 #define DATADIR dashboard_data/
 
@@ -55,6 +57,25 @@ void open_less(char *filename) {
     //remove_file(filename);
 }
 
+void gen_graphic(result results){
+    int i = 0;
+    string x[result.size()];
+    double y[result.size()];
+
+    for (auto row:results) {
+        for (auto field:row) {
+            x[i] = field.as<string>();
+            y[i] = field.as<double>();
+            i++;
+        }
+    }
+
+    lindata(0, result.size()*10, x, result.size());
+    plotxy(x, y, "Ch plot", "xlabel", "ylabel");
+    plot.outputType(PLOT_OUTPUTTYPE_FILE, "png color", "demo.png");
+    plot.plotting();
+}
+
 void gen_review_table(ostream& outfile, result results, pair<int, int> range) {
     TextTable table( '-', '|', '+' );
     int size = results.size();
@@ -102,6 +123,60 @@ void gen_date_rating_table(ostream& outfile, result results) {
     /* List down all the records */
     table.add("Data");
     table.add("Média");
+    table.endOfRow();
+
+    for (auto row:results) {
+        for (auto field:row) {
+            table.add(field.as<string>());
+        }
+        table.endOfRow();
+    }
+
+    outfile << table;
+}
+
+void gen_consulta_e_table(ostream& outfile, result results) {
+    TextTable table( '-', '|', '+' );
+    /* List down all the records */
+    table.add("asin_product");
+    table.add("avg_rat");
+    table.endOfRow();
+
+    for (auto row:results) {
+        for (auto field:row) {
+            table.add(field.as<string>());
+        }
+        table.endOfRow();
+    }
+
+    outfile << table;
+}
+
+void gen_id_category_rat_table(ostream& outfile, result results) {
+    TextTable table( '-', '|', '+' );
+    /* List down all the records */
+    table.add("ID_category");
+    table.add("Name");
+    table.add("Rat");
+    table.endOfRow();
+
+    for (auto row:results) {
+        for (auto field:row) {
+            table.add(field.as<string>());
+        }
+        table.endOfRow();
+    }
+
+    outfile << table;
+}
+
+void gen_consultaG_table(ostream& outfile, result results) {
+    TextTable table( '-', '|', '+' );
+    /* List down all the records */
+    table.add("costumer");
+    table.add("qtd_review");
+    table.add("product_group");
+    table.add("ranking");
     table.endOfRow();
 
     for (auto row:results) {
@@ -170,9 +245,10 @@ void consultaC(connection& conn, string asin) {
         gen_date_rating_table(outfile, results);
         outfile.close();
         open_less(filename);
-    } else {
+        } else {
         cout << "\nEvolução diária das médias de avaliação do produto " << asin << ":\n\n";
         gen_date_rating_table(cout, results);
+        gen_graphic(result);
     }
 }
 
@@ -194,8 +270,57 @@ void consultaD(connection& conn) {
     open_less(filename);
 }
 
+void consultaE(connection& conn){
+    nontransaction transac(conn);
+    string sql = "SELECT asin_product, avg(rating) AS avg_rat \
+                  FROM review WHERE votes> 0 and helpful/votes > 0.5 and rating >= 3 \
+                  GROUP BY asin_product ORDER BY avg_rat desc LIMIT 10;";
+
+   result results(transac.exec(sql));
+   cout << "\n Os 10 produtos com a maior média de avaliações úteis positivas por produto:\n\n";
+   gen_consulta_e_table(cout, results);
+}
+void consultaF(connection& conn) {
+    /* Create a non-transactional object. */
+    nontransaction transac(conn);
+    /* Create SQL statement */
+    string sql = "SELECT pc.id_category, c.name, avg(rating) as rat \
+                FROM review AS r \
+                JOIN product AS p ON p.asin = r.asin_product \
+                JOIN product_category AS pc ON pc.asin_product = p.asin \
+                JOIN category AS c ON c.id = pc.id_category \
+                WHERE r.votes > 0 AND r.helpful/r.votes > 0.5 AND r.rating >= 3 \
+                GROUP BY pc.id_category, c.name \
+                ORDER BY rat DESC LIMIT 5;";
+
+    /* Execute SQL query */
+    result results(transac.exec(sql));
+    cout << "\n As 5 categorias de produto com a maior média de avaliações úteis positivas por produto "<< ":\n\n";
+    gen_id_category_rat_table(cout, results);
+}
+
+void consultaG(connection& conn) {
+    char filename[] = "consultaG_results.txt";
+    ofstream outfile(filename);
+    /* Create a non-transactional object. */
+    nontransaction transac(conn);
+    /* Create SQL statement */
+    string sql = "SELECT * FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY product_group ORDER BY qtd_review DESC) AS ranking \
+                  FROM (SELECT costumer, COUNT(costumer) AS qtd_review, product_group \
+                  FROM (SELECT costumer, asin, product_group FROM product, review WHERE asin = asin_product) as top \
+                  GROUP BY costumer, product_group) AS top2 ) AS top3 \
+                  WHERE ranking <= 10;";
+
+    /* Execute SQL query */
+    result results(transac.exec(sql));
+    outfile << "\n Os 10 clientes que mais fizeram comentários por grupo de produto"<< ":\n\n";
+    gen_consultaG_table(outfile, results);
+    outfile.close();
+    open_less(filename);
+}
+
 int main() {
-    connection conn("dbname=trab1 user=anavi password=admin hostaddr=127.0.0.1 port=5432");
+    connection conn("dbname=trab1 user=clara password=admin hostaddr=127.0.0.1 port=5432");
     if (conn.is_open()) {
         cout << "Opened database successfully: " << conn.dbname() << "\n";
 
@@ -207,6 +332,10 @@ int main() {
     //consultaB(conn, "6304286961");
     consultaC(conn, "6304286961");
     //consultaD(conn);
+    //consultaE(conn);
+    //consultaF(conn);
+    //consultaG(conn);
+
 
     conn.disconnect();
 }
