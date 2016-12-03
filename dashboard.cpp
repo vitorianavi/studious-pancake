@@ -1,7 +1,6 @@
 #include <iomanip>
 #include <unistd.h>
 #include <sys/wait.h>
-#include <chplot.h>
 #include "geral.hpp"
 #include "TextTable.h"
 
@@ -57,23 +56,61 @@ void open_less(char *filename) {
     //remove_file(filename);
 }
 
-void gen_graphic(result results){
-    int i = 0;
-    string x[result.size()];
-    double y[result.size()];
+void open_gnuplot(){
+    char *args[3];
+    char gnu[]= "gnuplot";
+    char file[]= "plot_graph";
 
+    args[0] = gnu;
+    args[1] = file;
+    args[2] = NULL;
+
+    exec_cmd(args);
+    //remove_file(filename);
+
+}
+
+void open_graphic(){
+    char *args[3];
+    char cmd[] = "eog";
+    char file[]= "data_review.png";
+
+    args[0] = cmd;
+    args[1] = file;
+    args[2] = NULL;
+
+    exec_cmd(args);
+}
+
+
+void gen_graphic(result results){
+    char filename[] = "graph.dat";
+    int i = 0, size = results.size();
+    string x[size], y[size];
+    ofstream outfile(filename);
+
+    outfile <<"# " << "X" << " " << "Y" << '\n';
     for (auto row:results) {
         for (auto field:row) {
-            x[i] = field.as<string>();
-            y[i] = field.as<double>();
+            outfile << field.as<string>() << " ";
             i++;
+            if(i%2 == 0){
+                outfile << '\n';
+                i = 0;
+            }
         }
     }
+    outfile.close();
+    open_gnuplot();
+    open_graphic();
 
-    lindata(0, result.size()*10, x, result.size());
-    plotxy(x, y, "Ch plot", "xlabel", "ylabel");
-    plot.outputType(PLOT_OUTPUTTYPE_FILE, "png color", "demo.png");
-    plot.plotting();
+}
+
+void open_relatorio(result results){
+    char filename[] = "Relatorio.txt";
+    open_less(filename);
+    gen_graphic(results);
+
 }
 
 void gen_review_table(ostream& outfile, result results, pair<int, int> range) {
@@ -248,8 +285,8 @@ void consultaC(connection& conn, string asin) {
         } else {
         cout << "\nEvolução diária das médias de avaliação do produto " << asin << ":\n\n";
         gen_date_rating_table(cout, results);
-        gen_graphic(result);
     }
+    gen_graphic(results);
 }
 
 void consultaD(connection& conn) {
@@ -319,6 +356,109 @@ void consultaG(connection& conn) {
     open_less(filename);
 }
 
+void gerarRelatorio(connection& conn, string asin_product) {
+    char filename[] = "Relatorio.txt";
+    ofstream outfile(filename);
+    nontransaction transac(conn);
+    string sql;
+    /* Consulta A*/
+    sql = "SELECT * FROM (SELECT * FROM review WHERE asin_product = '";
+    sql += asin_product + "' ORDER BY helpful desc, rating DESC LIMIT 5) AS A ";
+    sql += "UNION ALL (SELECT * FROM review WHERE asin_product = '";
+    sql += asin_product + "' ORDER BY helpful DESC, rating LIMIT 5);";
+
+    /* Execute SQL query */
+    result results(transac.exec(sql));
+
+    outfile << "\n5 comentários mais úteis e com maior avaliação do produto " + asin_product + ".\n\n";
+    gen_review_table(outfile, results, make_pair(0, 5));
+    outfile << "\n\n";
+    outfile << "\n5 comentários mais úteis e com menor avaliação do produto " + asin_product + ".\n\n";
+    gen_review_table(outfile, results, make_pair(5, results.size()));
+    outfile << "\n\n";
+
+    /* Consulta B*/
+    sql = "SELECT pss.asin, pss.title, pss.product_group, pss.salesrank, pss.downloaded, p.salesrank, p.title FROM product AS p "\
+    "JOIN (SELECT * FROM product_similar AS ps, product AS s WHERE ps.asin_product = '";
+    sql += asin_product + "' AND ps.asin_similar = s.asin) AS pss ON p.asin = pss.asin_product "\
+    "WHERE p.salesrank > pss.salesrank;";
+
+    /* Execute SQL query */
+    result results_1(transac.exec(sql));
+
+    result::const_iterator c = results.begin();
+    outfile << "\nASIN: " << asin_product << "\nTítulo: " << c[6].as<string>() << "\nSalesrank: " << c[5].as<int>() << "\n\n";
+    outfile << "Produtos similares com maior número de vendas:\n\n";
+    outfile << "\n\n";
+    gen_product_table(outfile, results_1);
+
+    /* Consulta C*/
+    sql = "SELECT public_date, ROUND(AVG(rating),2) FROM review WHERE asin_product = '";
+    sql += asin_product + "' GROUP BY public_date ORDER BY public_date;";
+
+    /* Execute SQL query */
+    result results_2(transac.exec(sql));
+    outfile << "\nEvolução diária das médias de avaliação do produto " << asin_product << ":\n\n";
+    gen_date_rating_table(outfile, results_2);
+    outfile << "\n\n";
+    /*Consulta D*/
+    sql = "SELECT * FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY product_group ORDER BY salesrank) AS Row_ID"\
+    " FROM product WHERE salesrank > 0) AS A WHERE Row_ID <= 10 ORDER BY product_group;";
+
+    /* Execute SQL query */
+    result results_3(transac.exec(sql));
+
+    outfile << "Produtos líderes de venda em cada grupo:\n\n";
+    gen_product_table(outfile, results_3);
+    outfile << "\n\n";
+
+    /*Consulta E*/
+    sql = "SELECT asin_product, avg(rating) AS avg_rat \
+                  FROM review WHERE votes> 0 and helpful/votes > 0.5 and rating >= 3 \
+                  GROUP BY asin_product ORDER BY avg_rat desc LIMIT 10;";
+
+   result results_4(transac.exec(sql));
+   outfile << "\n Os 10 produtos com a maior média de avaliações úteis positivas por produto:\n\n";
+   gen_consulta_e_table(outfile, results_4);
+   outfile << "\n\n";
+
+   /*Consulta F*/
+   sql = "SELECT pc.id_category, c.name, avg(rating) as rat \
+               FROM review AS r \
+               JOIN product AS p ON p.asin = r.asin_product \
+               JOIN product_category AS pc ON pc.asin_product = p.asin \
+               JOIN category AS c ON c.id = pc.id_category \
+               WHERE r.votes > 0 AND r.helpful/r.votes > 0.5 AND r.rating >= 3 \
+               GROUP BY pc.id_category, c.name \
+               ORDER BY rat DESC LIMIT 5;";
+
+   /* Execute SQL query */
+   result results_5(transac.exec(sql));
+   outfile << "\n As 5 categorias de produto com a maior média de avaliações úteis positivas por produto "<< ":\n\n";
+   gen_id_category_rat_table(outfile, results_5);
+   outfile << "\n\n";
+
+   /*Condulta G*/
+
+   sql = "SELECT * FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY product_group ORDER BY qtd_review DESC) AS ranking \
+                 FROM (SELECT costumer, COUNT(costumer) AS qtd_review, product_group \
+                 FROM (SELECT costumer, asin, product_group FROM product, review WHERE asin = asin_product) as top \
+                 GROUP BY costumer, product_group) AS top2 ) AS top3 \
+                 WHERE ranking <= 10;";
+
+   /* Execute SQL query */
+   result results_6(transac.exec(sql));
+   outfile << "\n Os 10 clientes que mais fizeram comentários por grupo de produto"<< ":\n\n";
+   gen_consultaG_table(outfile, results_6);
+
+
+
+    outfile.close();
+    open_relatorio(results_2);
+
+}
+
+
 int main() {
     connection conn("dbname=trab1 user=clara password=admin hostaddr=127.0.0.1 port=5432");
     if (conn.is_open()) {
@@ -327,15 +467,51 @@ int main() {
     } else {
         cout << "Can't open database\n";
     }
-
-    //consultaA(conn, "6304286961");
-    //consultaB(conn, "6304286961");
-    consultaC(conn, "6304286961");
-    //consultaD(conn);
-    //consultaE(conn);
-    //consultaF(conn);
-    //consultaG(conn);
-
+    cout << "--------------------------------------------------- Dashboard ---------------------------------------------------\n";
+    cout << "1 - Listar os 5 comentários mais úteis e com maior avaliação e os 5 comentários mais úteis e com menor avaliação, dado um produto x \n";
+    cout << "2 - Listar os produtos similares com maiores vendas, dado um produto x \n";
+    cout << "3 - Mostrar a evolução diária das médias de avaliação de um produto x \n";
+    cout << "4 - Listar os 10 produtos lideres de venda em cada grupo de produtos \n";
+    cout << "5 - Listar os 10 produtos com a maior média de avaliações úteis positivas por produto\n";
+    cout << "6 - Listar a 5 categorias de produto com a maior média de avaliações úteis positivas por produto\n";
+    cout << "7 - Listar os 10 clientes que mais fizeram comentários por grupo de produto\n";
+    cout << "8 - Gerar Relatório\n";
+    int opcao;
+    string asin_prod;
+    cout << "Escolha uma opção: ";
+    cin >> opcao;
+    if(opcao == 1){
+        cout << "Digite o asin do produto: ";
+        cin >> asin_prod;
+        consultaA(conn, asin_prod);
+    }
+    if(opcao == 2){
+        cout << "Digite o asin do produto: ";
+        cin >> asin_prod;
+        consultaB(conn, asin_prod);
+    }
+    if(opcao == 3){
+        cout << "Digite o asin do produto: ";
+        cin >> asin_prod;
+        consultaC(conn, asin_prod);
+    }
+    if(opcao == 4){
+        consultaD(conn);
+    }
+    if(opcao == 5){
+        consultaE(conn);
+    }
+    if(opcao == 6){
+        consultaF(conn);
+    }
+    if(opcao == 7){
+        consultaG(conn);
+    }
+    if(opcao == 8){
+        cout << "Digite o asin do produto: ";
+        cin >> asin_prod;
+        gerarRelatorio(conn, asin_prod);
+    }
 
     conn.disconnect();
 }
